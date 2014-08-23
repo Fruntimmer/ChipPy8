@@ -9,9 +9,11 @@ from pyglet.window import key
 
 debug = False
 
+
 def log(str):
     if debug:
         print str
+
 
 class Chip8(window.Window):
     #Input map, each valid key is given the address to the keyvalue in input buffer
@@ -24,12 +26,11 @@ class Chip8(window.Window):
               key.NUM_7: 0x6,  # key 7
               key.NUM_8: 0x7,  # key 8
               key.NUM_9: 0x8,  # key 9
-              key.A: 0x9,      # key A
-              key.A: 0xA,      # key B
-              key.C: 0xB,      # key C
-              key.D: 0xC,      # key D
-              key.E: 0xD,  # key E
-              key.F: 0xE,  # key F
+              key.A: 0xA,      # key A
+              key.B: 0xB,      # key B
+              key.C: 0xC,      # key C
+              key.D: 0xD,      # key D
+              key.E: 0xE,      # key E
               }
     input_buffer = [0] * 16
 
@@ -79,7 +80,7 @@ class Chip8(window.Window):
                        0xA000: self.set_i,          # Annn - LD I, addr
                        0xB000: self.jump_nnn_v0,    # Bnnn - JP V0, addr
                        0xC000: self.set_x_rand_kk,  # Cxkk - RND Vx, byte
-                       0xD000: self._dxyn,  # Dxyn - DRW Vx, Vy, nibble
+                       0xD000: self._dxyn,          # Dxyn - DRW Vx, Vy, nibble
                        0xF000: self._fxnn,          # Branch out from all F opcodes
                        0xE000: self._exnn,          # Branch out from all E opcodes
                        }
@@ -214,7 +215,7 @@ class Chip8(window.Window):
             # 8xy6 - SHR Vx {, Vy}
             #Set VF to least significant bit of Vx. Set Vx = Vx SHR 1.
             self.v[0x0F] = self.v[x]&0x0001
-            self.v[x] >= 1  # Divide Vx by 2 basically
+            self.v[x] >>= 1  # Divide Vx by 2 basically
             log("8xy6: SHR Vx {, Vy}")
 
         elif set_type == 7:
@@ -232,19 +233,38 @@ class Chip8(window.Window):
             #If the most-significant bit of Vx is 1, then VF is set to 1, otherwise to 0. Then Vx is multiplied by 2.
             msb = (self.v[x] & 255)>> 7  # get most significant bit
             self.v[0x0F] = msb
-            self.v[x] <= 1 # Left shift. Basically multiply by 2
-            log("8xyE: Set Vx = Vx SHL 1. Unwritten")
+            self.v[x] <<= 1 # Left shift. Basically multiply by 2
+            log("8xyE: Set Vx = Vx SHL 1")
 
         else:
             raise Warning("Unknown instruction: " + hex(self.instr))
 
     def _dxyn(self):
-        #self.display_buffer[random.randint(0, 63)][random.randint(0, 31)] = 1
+        pos_x = (self.instr & 0x0F00) >> 8
+        pos_y = (self.instr & 0x00F0) >> 4
+        height = self.instr & 0x000F
+        mem_pointer = self.i #self.i holds the location of where to start reading sprite
 
+        for i in range(0, height):
+            byte = self.memory[mem_pointer+i]
+            for offset in range(0, 8):
+                bit = (byte >> (7-i)) & 0x01
+                displayed_pixel = self.display_buffer[pos_x+offset][pos_y+i]
+                bit_xor = bit ^ displayed_pixel
+                if displayed_pixel == 1 and bit_xor == 0:
+                    self.v[0x0F] = 1
+                self.display_buffer[pos_x+offset][pos_y+i] = bit_xor
+
+        # for y in range(0, pos_y+5):
+        #     for x in range(0, pos_x+8):
+        #         bit = self.display_buffer[x][y]
+        #         bit_xor = bit ^ self.memory[mem_pointer]
+        #         if bit == 1 and bit_xor == 0:
+        #             self.v[0x0F] = 1
+        #         self.display_buffer[x][y] = bit_xor
+        #         mem_pointer += 1
         self.draw_flag = True
-        # Dxyn - DRW Vx, Vy, nibble
-        # Display n-byte sprite starting at memory location I at (Vx, Vy), set VF = collision.
-        log("Display_nbyte unwritten")
+        log("Display_nbyte")
 
     def _exnn(self):
         x = (self.instr & 0x0F00) >> 8
@@ -278,7 +298,7 @@ class Chip8(window.Window):
         elif f_type == 0x0A:
             # Wait for a key press, store the value of the key in Vx.
             # All execution stops until a key is pressed, then the value of that key is stored in Vx.
-            print "WAITING FOR KEY PRESS"
+            #print "WAITING FOR KEY PRESS"
             key_found = False
             for i in range(0, 16):
                 if self.input_buffer[i] == 1:
@@ -297,21 +317,32 @@ class Chip8(window.Window):
         elif f_type == 0x29:
             # Set I = location of sprite for digit Vx.
             # The value of I is set to the location for the hexadecimal sprite corresponding to the value of Vx.
-            # See section 2.4, Display, for more information on the Chip-8 hexadecimal font.
-            log("Fx29. LD F, Vx. Unwritten.")
+            # If I understand this right this adress will be used for the self.fonts. 5 = width of one font char
+            self.i = (self.v[x] * 5) & 0xFFF
+            log("Fx29. LD F, Vx.")
         elif f_type == 0x33:
             # Fx33 - LD B, Vx. Store BCD representation of Vx in memory locations I, I+1, and I+2.
             # The interpreter takes the decimal value of Vx, and places the hundreds digit in memory
             # at location in I, the tens digit at location I+1, and the ones digit at location I+2.
-            log("Fx33. LD B, Vx. Unwritten")
+            self.memory[self.i] = self.v[x]//100
+            self.memory[self.i+1] = self.v[x] % 100//10
+            self.memory[self.i+2] = self.v[x] % 10
+
+            log("Fx33. LD B, Vx")
         elif f_type == 0x55:
             # LD [I], Vx. Store registers V0 through Vx in memory starting at location I.
             #The interpreter copies the values of registers V0 through Vx into memory, starting at the address in I.
-            log("Fx55. LD B, Vx. Unwritten")
+            for reg_pos in range(0, self.v[x]):  # I think I want to +1 it so I actually get the last reg as well
+                self.memory[self.i+reg_pos] = self.v[reg_pos]
+            self.i += self.v[x] +1
+            log("Fx55. LD B, Vx.")
         elif f_type == 0x65:
             # Fx65 - LD Vx, [I]. Read registers V0 through Vx from memory starting at location I.
             # The interpreter reads values from memory starting at location I into registers V0 through Vx.
-            log("Fx65. LD B, Vx. Unwritten")
+            for reg_pos in range(0, self.v[x]):  # I think I want to +1 it so I actually get the last reg as well
+                self.v[reg_pos] = self.memory[self.i+reg_pos]
+            self.i += self.v[x] +1
+            log("Fx65. LD B, Vx2")
         else:
             raise Warning("Unknown instruction: " + str(hex(self.instr)))
 
@@ -320,6 +351,9 @@ class Chip8(window.Window):
         x = (self.instr & 0x0F00) >> 8
         kk = self.instr & 0x00FF
         self.v[x] += kk
+        if self.v[x] > 255:
+            self.v[x] &= 255
+            self.v[0x0F] = 1
         log("ADD")
 
     def clear_screen(self):  # 0x00E0 CLS. Clear screen.
@@ -336,7 +370,7 @@ class Chip8(window.Window):
         for i in range(0, len(self.fonts)):
             self.memory[i] = self.fonts[i]
 
-    def load_rom(self, path = "AD.ch8"):
+    def load_rom(self, path = "Mastermind.ch8"):
         rom_bin = open(path, 'rb').read()  # 'rb' opens file in binary
         i = 0
         while i < len(rom_bin):
@@ -393,6 +427,7 @@ class Chip8(window.Window):
         else:
             #play_sound()
             pass
+
     def on_key_press(self, symbol, modifiers):  # overrides Window.on_key_press
         try:
             self.input_buffer[self.keypad[symbol]] = 1
