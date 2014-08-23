@@ -16,6 +16,7 @@ def log(str):
 
 
 class Chip8(window.Window):
+    one_print = True
     #Input map, each valid key is given the address to the keyvalue in input buffer
     keypad = {key.NUM_1: 0x0,  # key 1
               key.NUM_2: 0x1,  # key 2
@@ -26,11 +27,12 @@ class Chip8(window.Window):
               key.NUM_7: 0x6,  # key 7
               key.NUM_8: 0x7,  # key 8
               key.NUM_9: 0x8,  # key 9
-              key.A: 0xA,      # key A
-              key.B: 0xB,      # key B
-              key.C: 0xC,      # key C
-              key.D: 0xD,      # key D
-              key.E: 0xE,      # key E
+              key.A:     0xA,  # key A
+              key.B:     0xB,  # key B
+              key.C:     0xC,  # key C
+              key.D:     0xD,  # key D
+              key.E:     0xE,  # key E
+              key.F:     0xF,  # key F
               }
     input_buffer = [0] * 16
 
@@ -68,40 +70,46 @@ class Chip8(window.Window):
         #self.set_size(1080, 640)
         self.display_buffer = [[0 for y in range(32)] for x in range(64)]
         self.op_map = {0x0000: self._00nn,          # 0000 RET and CLS bot have opcode most significant bit 0
-                       0x1000: self.jump_nnn,       # 1nnn jump to address nnn
-                       0x2000: self.call,           # 2nnn call subroutine at address nnn
-                       0x3000: self.skip_x_e_kk,    # 3xkk skip next instruction if Vx = kk
-                       0x4000: self.skip_x_ne_kk,   # 4xkk skip next instruction if Vx != kk
-                       0x5000: self.skip_x_e_y,     # 5xy0 skip if Vx = Vy. Compare two registers
-                       0x6000: self.set_x_kk,       # 6xkk SET Vx = kk
-                       0x7000: self.add,            # 7xkk ADD Vx, byte. Vx = Vx + kk
+                       0x1000: self._0nnn,       # 1nnn jump to address nnn
+                       0x2000: self._2nnn,           # 2nnn call subroutine at address nnn
+                       0x3000: self._3xkk,    # 3xkk skip next instruction if Vx = kk
+                       0x4000: self._4xll,   # 4xkk skip next instruction if Vx != kk
+                       0x5000: self._5xy0,     # 5xy0 skip if Vx = Vy. Compare two registers
+                       0x6000: self._6xkk,       # 6xkk SET Vx = kk
+                       0x7000: self._7xkk,            # 7xkk ADD Vx, byte. Vx = Vx + kk
                        0x8000: self._8xy0,          # 8xy0 set Vx = Vy
-                       0x9000: self.skip_x_ne_y,    # 9xy0 - SNE Vx, Vy
-                       0xA000: self.set_i,          # Annn - LD I, addr
-                       0xB000: self.jump_nnn_v0,    # Bnnn - JP V0, addr
-                       0xC000: self.set_x_rand_kk,  # Cxkk - RND Vx, byte
+                       0x9000: self._9xy0,    # 9xy0 - SNE Vx, Vy
+                       0xA000: self._Annn,          # Annn - LD I, addr
+                       0xB000: self._Bnnn,    # Bnnn - JP V0, addr
+                       0xC000: self._cxkk,  # Cxkk - RND Vx, byte
                        0xD000: self._dxyn,          # Dxyn - DRW Vx, Vy, nibble
                        0xF000: self._fxnn,          # Branch out from all F opcodes
                        0xE000: self._exnn,          # Branch out from all E opcodes
                        }
 
-    def jump_nnn(self):
-        log("jumping to address: " + str(hex(self.instr&0x0FFF)))
+    def _00nn(self):
+        nn_type = self.instr & 0x00FF
+        if nn_type == 0xE0:
+            self.clear_screen()
+        elif nn_type == 0xEE:
+            self.pc = self.stack.pop()
+            log("RET")
+        else:
+            raise Warning("Unknown instruction: " + hex(self.instr))
+
+    def _0nnn(self):
         #Jump to address contained in the 3 rightmost nibbles of instruction
         self.pc = self.instr & 0x0FFF
+        log("jumping to address: " + str(hex(self.instr&0x0FFF)))
 
-    def jump_nnn_v0(self):  # Bnnn - JP V0, addr. Jump to location nnn + V0.
-        nnn = self.instr & 0x0FFF
-        self.pc = nnn + self.v[0]
-
-    def call(self):
+    def _2nnn(self): # Call nnn
         #push ret address to stack
         self.stack.append(self.pc)
         #Then jump to new location
         self.pc = self.instr & 0x0FFF
         log("CALL to address" + str(hex(self.instr&0x0FFF)))
 
-    def skip_x_e_kk(self):
+    def _3xkk(self):
         # 3xkk: if Vx equals kk skip next instruction
         x = (self.instr & 0x0F00) >> 8
         kk = self.instr & 0x00FF
@@ -111,7 +119,7 @@ class Chip8(window.Window):
         else:
             log("V = kk is False")
 
-    def skip_x_ne_kk(self):
+    def _4xll(self):
         # 4xkk skip next instruction if Vx != kk
         x = (self.instr & 0x0F00) >> 8
         kk = self.instr & 0x00FF
@@ -121,7 +129,7 @@ class Chip8(window.Window):
         else:
             log("V != kk is False")
 
-    def skip_x_e_y(self):
+    def _5xy0(self):
         # 5xy0 skip if Vx = Vy. Compare two registers
         x = (self.instr & 0x0F00) >> 8
         y = (self.instr & 0x00F0) >> 4
@@ -131,43 +139,18 @@ class Chip8(window.Window):
         else:
             log("Vx = Vy is False")
 
-    def skip_x_ne_y(self):
-        # 9xy0 Skip next instruction if Vx != Vy.
-        x = (self.instr & 0x0F00) >> 8
-        y = (self.instr & 0x00F0) >> 4
-        if self.v[x] != self.v[y]:
-            log("Vx != Vy is True")
-            self.pc += 2
-        else:
-            log("Vx != Vy is False")
-
-    def set_i(self):
-        #Annn - LD I, addr
-        self.i = self.instr & 0x0FFF
-        log("LD I, addr")
-
-    def set_x_rand_kk(self):
-        #Set Vx = random byte AND kk.
-        x = (self.instr & 0x0F00) >> 8
-        kk = self.instr & 0x00FF
-        self.v[x] = random.randint(0, 255) & kk
-        log("Set Vx = random byte AND kk.")
-
-    def set_x_kk(self):
+    def _6xkk(self):
         # 6xkk SET Vx = kk
         x = (self.instr & 0x0F00) >> 8
-        kk = self.instr & 0x00FF
-        self.v[x] = kk
-        log("Set V" + str(x) + " to " + str(kk))
+        self.v[x] = self.instr & 0x00FF
+        log("6xkk: Set Vx to kk" )
 
-    def _00nn(self):
-        nn_type = self.instr & 0x00FF
-        if nn_type == 0xE0:
-            self.clear_screen()
-        elif nn_type == 0xEE:
-            self.ret()
-        else:
-            raise Warning("Unknown instruction: " + hex(self.instr))
+    def _7xkk(self):
+        # 7xkk ADD Vx, byte. Vx = Vx + kk
+        x = (self.instr & 0x0F00) >> 8
+        kk = self.instr & 0x00FF
+        self.v[x] += kk
+        log("ADD")
 
     def _8xy0(self):
         set_type = self.instr & 0x000F
@@ -176,27 +159,30 @@ class Chip8(window.Window):
         if set_type == 0:
             # 8xy0 Set Vx = Vy.
             self.v[x] = self.v[y]
+            self.v[x] &= 0xff
             log("8xy0: Set V" + str(x) + " to V" + str(y))
+
         elif set_type == 1:
             # 8xy1 SET Vx BITWISE OR Vy
             self.v[x] |= self.v[y]
+            self.v[x] &= 0xff
             log("8xy1: Vx |= Vy")
         elif set_type == 2:
             # 8xy2 SET Vx BITWISE AND Vy
             self.v[x] &= self.v[y]
+            self.v[x] &= 0xff
             log("8xy2: Vx &= Vy")
         elif set_type == 3:
             # 8xy3 SET Vx BITWISE XOR Vy
             self.v[x] ^= self.v[y]
+            self.v[x] &= 0xff
             log("8xy3: Vx ^= Vy")
         elif set_type == 4:
             # 8xy4 SET Vx = Vx + Vy
             self.v[x] += self.v[y]
-            if self.v[x] > 255:
-                # wraps V[x] if it overflows and set V[F] to 1 as carry bit.
-                # For instance Vx = 257 & 255 would wrap to Vx = 1
+            if self.v[x] > 0xff:
                 self.v[0xF] = 1
-                self.v[x] &= 255
+                self.v[x] &= 0xff
             else:
                 self.v[0xF] = 0  # Not sure if I should do this but it seems reasonable.
             log("8xy4: Vx += Vy")
@@ -208,7 +194,7 @@ class Chip8(window.Window):
                 self.v[0xF] = 1
             else:
                 self.v[0xf] = 0
-            self.v[x] = (self.v[x] - self.v[y]) & 255  # I wrap it so 0-1 = 255. Not sure if this is right. use abs?
+            self.v[x] = (self.v[x] - self.v[y]) & 0xff  # I wrap it so 0-1 = 255. Not sure if this is right. use abs?
             log("8xy5: Vx -= Vy")
 
         elif set_type == 6:
@@ -225,44 +211,64 @@ class Chip8(window.Window):
                 self.v[0x0F] = 1
             else:
                 self.v[0x0F] = 0
-            self.v[y] = (self.v[y] - self.v[x]) & 255  # I wrap it so 0-1 = 255. Not sure if this is right. use abs?
+            self.v[x] = (self.v[y] - self.v[x]) & 0xff  # I wrap it so 0-1 = 255. Not sure if this is right. use abs?
             log("8xy7: Vy -= Vx")
 
         elif set_type == 0xE:
             # 8xyE. Set Vx = Vx SHL 1.
             #If the most-significant bit of Vx is 1, then VF is set to 1, otherwise to 0. Then Vx is multiplied by 2.
-            msb = (self.v[x] & 255)>> 7  # get most significant bit
+            msb = (self.v[x] & 0xff)>> 7  # get most significant bit
             self.v[0x0F] = msb
             self.v[x] <<= 1 # Left shift. Basically multiply by 2
+            self.v[x] &= 0xff
             log("8xyE: Set Vx = Vx SHL 1")
 
         else:
             raise Warning("Unknown instruction: " + hex(self.instr))
 
+    def _9xy0(self):
+        # 9xy0 Skip next instruction if Vx != Vy.
+        x = (self.instr & 0x0F00) >> 8
+        y = (self.instr & 0x00F0) >> 4
+        if self.v[x] != self.v[y]:
+            log("9xy0: Vx != Vy is True")
+            self.pc += 2
+        else:
+            log("9xy0: Vx != Vy is False")
+
+    def _Annn(self):
+        #Annn - LD I, addr
+        self.i = self.instr & 0x0FFF
+        log("LD I, addr")
+
+    def _Bnnn(self):  # Bnnn - JP V0, addr. Jump to location nnn + V0.
+        nnn = self.instr & 0x0FFF
+        self.pc = nnn + self.v[0]
+
+    def _cxkk(self):
+        #Set Vx = random byte AND kk.
+        x = (self.instr & 0x0F00) >> 8
+        kk = self.instr & 0x00FF
+        self.v[x] = random.randint(0, 255) & kk
+        self.v[x] &= 0xff
+        log("Set Vx = random byte AND kk.")
+
     def _dxyn(self):
-        pos_x = (self.instr & 0x0F00) >> 8
-        pos_y = (self.instr & 0x00F0) >> 4
+        pos_x = self.v[((self.instr & 0x0F00) >> 8)] & 0xff
+        pos_y = self.v[((self.instr & 0x00F0) >> 4)] & 0xff
         height = self.instr & 0x000F
-        mem_pointer = self.i #self.i holds the location of where to start reading sprite
 
         for i in range(0, height):
-            byte = self.memory[mem_pointer+i]
+            byte = self.memory[self.i+i]
             for offset in range(0, 8):
                 bit = (byte >> (7-i)) & 0x01
+                if pos_x+offset > 63 or pos_y +i > 31:
+                    continue
                 displayed_pixel = self.display_buffer[pos_x+offset][pos_y+i]
-                bit_xor = bit ^ displayed_pixel
+                bit_xor = displayed_pixel ^ bit
                 if displayed_pixel == 1 and bit_xor == 0:
                     self.v[0x0F] = 1
                 self.display_buffer[pos_x+offset][pos_y+i] = bit_xor
-
-        # for y in range(0, pos_y+5):
-        #     for x in range(0, pos_x+8):
-        #         bit = self.display_buffer[x][y]
-        #         bit_xor = bit ^ self.memory[mem_pointer]
-        #         if bit == 1 and bit_xor == 0:
-        #             self.v[0x0F] = 1
-        #         self.display_buffer[x][y] = bit_xor
-        #         mem_pointer += 1
         self.draw_flag = True
         log("Display_nbyte")
 
@@ -273,14 +279,14 @@ class Chip8(window.Window):
             # Skip next instruction if key with the value of Vx is pressed.
             # Checks the keyboard, and if the key corresponding to the
             # value of Vx is currently in the down position, PC is increased by 2
-            if self.input_buffer[x] == 1:
+            if self.input_buffer[self.v[x]] == 1:
                 self.pc +=2
             log("SKP Vx")
         elif nn_type == 0x00A1:
             # Skip next instruction if key with the value of Vx is not pressed.
             # Checks the keyboard, and if the key corresponding to the value of
             # Vx is currently in the up position, PC is increased by 2.
-            if self.input_buffer[x] != 1:
+            if self.input_buffer[self.v[x]] != 1:
                 self.pc +=2
             log("SKNP Vx")
         else:
@@ -292,13 +298,10 @@ class Chip8(window.Window):
         if f_type == 0x07:
             self.v[x] = self.delay_timer
             log("Vx = delay_timer")
-        elif f_type == 0x15:
-            self.delay_timer = self.v[x]
-            log("delay_timer = Vx")
         elif f_type == 0x0A:
             # Wait for a key press, store the value of the key in Vx.
             # All execution stops until a key is pressed, then the value of that key is stored in Vx.
-            #print "WAITING FOR KEY PRESS"
+            # print "WAITING FOR KEY PRESS"
             key_found = False
             for i in range(0, 16):
                 if self.input_buffer[i] == 1:
@@ -307,18 +310,25 @@ class Chip8(window.Window):
             if not key_found:
                 self.pc -= 2  # If no key press found. Decrement PC to loop in same instruction
             log("Wait for keypress")
+        elif f_type == 0x15:
+            self.delay_timer = self.v[x]
+            log("delay_timer = Vx")
         elif f_type == 0x18:
             self.sound_timer = self.v[x]
             log("sound_timer = Vx")
         elif f_type == 0x1e:
             #Set I = I + Vx.
             self.i += self.v[x]
+            if self.i > 0xfff:
+                self.v[0x0F] = 1
+            else:
+                self.v[0x0F] = 0
             log("i += Vx")
         elif f_type == 0x29:
             # Set I = location of sprite for digit Vx.
             # The value of I is set to the location for the hexadecimal sprite corresponding to the value of Vx.
             # If I understand this right this adress will be used for the self.fonts. 5 = width of one font char
-            self.i = (self.v[x] * 5) & 0xFFF
+            self.i = (5*(self.v[x])) & 0xfff
             log("Fx29. LD F, Vx.")
         elif f_type == 0x33:
             # Fx33 - LD B, Vx. Store BCD representation of Vx in memory locations I, I+1, and I+2.
@@ -332,9 +342,9 @@ class Chip8(window.Window):
         elif f_type == 0x55:
             # LD [I], Vx. Store registers V0 through Vx in memory starting at location I.
             #The interpreter copies the values of registers V0 through Vx into memory, starting at the address in I.
-            for reg_pos in range(0, self.v[x]):  # I think I want to +1 it so I actually get the last reg as well
+            for reg_pos in range(0, x): #or should it be range(0, self.v[x]? dont think so
                 self.memory[self.i+reg_pos] = self.v[reg_pos]
-            self.i += self.v[x] +1
+            self.i += self.v[x] + 1
             log("Fx55. LD B, Vx.")
         elif f_type == 0x65:
             # Fx65 - LD Vx, [I]. Read registers V0 through Vx from memory starting at location I.
@@ -346,24 +356,10 @@ class Chip8(window.Window):
         else:
             raise Warning("Unknown instruction: " + str(hex(self.instr)))
 
-    def add(self):
-        # 7xkk ADD Vx, byte. Vx = Vx + kk
-        x = (self.instr & 0x0F00) >> 8
-        kk = self.instr & 0x00FF
-        self.v[x] += kk
-        if self.v[x] > 255:
-            self.v[x] &= 255
-            self.v[0x0F] = 1
-        log("ADD")
-
-    def clear_screen(self):  # 0x00E0 CLS. Clear screen.
+    def clear_screen(self):
         self.display_buffer = self.display_buffer = [[0 for y in range(32)] for x in range(64)]
         self.draw_flag = True
         log("CLS")
-
-    def ret(self):  # 0x00EE RET. Return from a subroutine
-        self.pc = self.stack.pop()
-        log("RET")
 
     #start up functions
     def load_fonts(self):
@@ -391,10 +387,13 @@ class Chip8(window.Window):
 
     #pyglet.window.draw() override
     def draw(self):
+        one_print_active = False
+        self.clear()
         graphics.glColor3f(1, 1, 1)
         for x in range (0, len(self.display_buffer)):
             for y in range(0, len(self.display_buffer[x])):
                 if self.display_buffer[x][y] == 1:
+                    one_print_active = True
                     side = self.width/64
                     v = [side*x, self.height - side*y,
                          side*x, self.height -(side*y+side),
@@ -402,6 +401,19 @@ class Chip8(window.Window):
                          side*x+side, self.height-side*y
                     ]
                     graphics.draw(4, graphics.gl.GL_QUADS, ('v2i', (v[0],v[1], v[2],v[3], v[4],v[5], v[6],v[7])))
+
+        if one_print_active:
+            file = open("log.txt",'w')
+            for x in range (0, len(self.display_buffer)):
+                for y in range(0, len(self.display_buffer[x])):
+                    file.write(str(self.display_buffer[x][y]))
+                file.write("\n")
+            file.write("#############################")
+            file.close()
+            self.one_print= False
+            print "Printed"
+
+
     def fetch_instruction(self):
         i1 = self.memory[self.pc]
         i2 = self.memory[self.pc+1]
