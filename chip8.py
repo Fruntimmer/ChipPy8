@@ -7,15 +7,18 @@ from pyglet import window
 from pyglet import graphics
 from pyglet.window import key
 
-debug = False
-
 
 def log(str):
     if debug:
         print str
 
+debug = True
 
 class Chip8(window.Window):
+    step_instruction = False
+    step = False
+    step_key = key.RIGHT
+
     one_print = True
     #Input map, each valid key is given the address to the keyvalue in input buffer
     keypad = {key.NUM_1: 0x0,  # key 1
@@ -143,7 +146,7 @@ class Chip8(window.Window):
         # 6xkk SET Vx = kk
         x = (self.instr & 0x0F00) >> 8
         self.v[x] = self.instr & 0x00FF
-        log("6xkk: Set Vx to kk" )
+        log("6xkk: Set Vx to kk.\nvX = "+ str(self.v[x]) +", kk =  " + str(self.instr & 0x00FF))
 
     def _7xkk(self):
         # 7xkk ADD Vx, byte. Vx = Vx + kk
@@ -220,7 +223,7 @@ class Chip8(window.Window):
             msb = (self.v[x] & 0xff)>> 7  # get most significant bit
             self.v[0x0F] = msb
             self.v[x] <<= 1 # Left shift. Basically multiply by 2
-            self.v[x] &= 0xff
+            self.v[x] &= 0xff  # wrap
             log("8xyE: Set Vx = Vx SHL 1")
 
         else:
@@ -344,14 +347,14 @@ class Chip8(window.Window):
             #The interpreter copies the values of registers V0 through Vx into memory, starting at the address in I.
             for reg_pos in range(0, x): #or should it be range(0, self.v[x]? dont think so
                 self.memory[self.i+reg_pos] = self.v[reg_pos]
-            self.i += self.v[x] + 1
+            #self.i += self.v[x] + 1
             log("Fx55. LD B, Vx.")
         elif f_type == 0x65:
             # Fx65 - LD Vx, [I]. Read registers V0 through Vx from memory starting at location I.
             # The interpreter reads values from memory starting at location I into registers V0 through Vx.
             for reg_pos in range(0, self.v[x]):  # I think I want to +1 it so I actually get the last reg as well
                 self.v[reg_pos] = self.memory[self.i+reg_pos]
-            self.i += self.v[x] +1
+            #self.i += self.v[x] +1
             log("Fx65. LD B, Vx2")
         else:
             raise Warning("Unknown instruction: " + str(hex(self.instr)))
@@ -366,7 +369,7 @@ class Chip8(window.Window):
         for i in range(0, len(self.fonts)):
             self.memory[i] = self.fonts[i]
 
-    def load_rom(self, path = "Mastermind.ch8"):
+    def load_rom(self, path = "Pong.ch8"):
         rom_bin = open(path, 'rb').read()  # 'rb' opens file in binary
         i = 0
         while i < len(rom_bin):
@@ -395,6 +398,7 @@ class Chip8(window.Window):
                 if self.display_buffer[x][y] == 1:
                     one_print_active = True
                     side = self.width/64
+                    #vertices of a box
                     v = [side*x, self.height - side*y,
                          side*x, self.height -(side*y+side),
                          side*x+side, self.height -(side*y+side),
@@ -402,17 +406,16 @@ class Chip8(window.Window):
                     ]
                     graphics.draw(4, graphics.gl.GL_QUADS, ('v2i', (v[0],v[1], v[2],v[3], v[4],v[5], v[6],v[7])))
 
-        if one_print_active:
-            file = open("log.txt",'w')
-            for x in range (0, len(self.display_buffer)):
-                for y in range(0, len(self.display_buffer[x])):
-                    file.write(str(self.display_buffer[x][y]))
-                file.write("\n")
-            file.write("#############################")
-            file.close()
-            self.one_print= False
-            print "Printed"
-
+        # if one_print_active:
+        #     file = open("log.txt",'w')
+        #     for y in range (0, 32):
+        #         for x in range(0, 64):
+        #             file.write(str(self.display_buffer[x][y]))
+        #         file.write("\n")
+        #     file.write("#############################")
+        #     file.close()
+        #     self.one_print= False
+            #print "Printed"
 
     def fetch_instruction(self):
         i1 = self.memory[self.pc]
@@ -441,18 +444,24 @@ class Chip8(window.Window):
             pass
 
     def on_key_press(self, symbol, modifiers):  # overrides Window.on_key_press
-        try:
-            self.input_buffer[self.keypad[symbol]] = 1
-            print "VALID KEY PRESSED"
-        except KeyError:
-            print "KEY NOT RECOGNIZED"
+        if symbol == self.step_key:
+            self.step = True
+        else:
+            try:
+                self.input_buffer[self.keypad[symbol]] = 1
+                print "VALID KEY PRESSED"
+            except KeyError:
+                print "KEY NOT RECOGNIZED"
 
     def on_key_release(self, symbol, modifiers):
         try:
             self.input_buffer[self.keypad[symbol]] = 0
             print "VALID KEY RELEASED"
         except KeyError:
-            print "KEY NOT RECOGNIZED"
+            if self.step_instruction and symbol == self.step_key:
+                pass
+            else:
+                print "KEY NOT RECOGNIZED"
 
     def main(self):
         self.initialize()
@@ -460,11 +469,13 @@ class Chip8(window.Window):
         self.flip()
         while not self.has_exit:
             self.dispatch_events()
-            self.tick()
-            if self.draw_flag:
-                self.draw()
-                self.flip()
-                self.draw_flag = False
+            if (self.step_instruction and self.step) or not self.step_instruction:
+                self.tick()
+                if self.draw_flag:
+                    self.draw()
+                    self.flip()
+                    self.draw_flag = False
+            self.step = False
 
 
 
