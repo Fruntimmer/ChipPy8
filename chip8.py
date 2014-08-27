@@ -72,6 +72,8 @@ class Chip8(window.Window):
     x, y, nn = None, None, None
     draw_flag = False                       # Indicate if screen should be redrawn
     wait_input = False                      # Indicate if program should wait for input
+    clock_speed = 1.0/600
+    print clock_speed
 
     def __init__(self,*args, **kwargs):
         super(Chip8, self).__init__(*args, **kwargs)
@@ -492,10 +494,22 @@ class Chip8(window.Window):
                 self.draw_flag = True
             except ValueError:
                 self.input_str = "ERROR UNKNOWN COMMAND"
+        elif cmd == "CLOCK":
+            self.set_clock(values)
         elif cmd == "ERROR":
             self.input_str = ""
         else:
             self.input_str = "ERROR UNKNOWN COMMAND"
+
+    def set_clock(self, w):
+        try:
+            t = int(w[0])
+            if t < 1:
+                raise ValueError
+            self.clock_speed = 1.0/t
+            self.input_str = ""
+        except ValueError:
+            self.input_str = "ERROR NOT A VALID VALUE"
 
     def handle_load_cmd(self, w):
         rom_string = " ".join(w)
@@ -543,7 +557,7 @@ class Chip8(window.Window):
         while not self.has_exit:
             tick_start = time()
             self.dispatch_events()
-            if ((self.step_instruction and self.step) or not self.step_instruction) and cpu_clock > 1/600:
+            if ((self.step_instruction and self.step) or not self.step_instruction) and cpu_clock > self.clock_speed:
                 self.tick()
                 cpu_clock = 0.0
                 self.step = False
@@ -561,6 +575,7 @@ class Chip8(window.Window):
                 screen_clock = 0.0
             screen_clock += time()-tick_start
             cpu_clock += time()-tick_start
+
 
 c8 = Chip8(1280, 640)
 
