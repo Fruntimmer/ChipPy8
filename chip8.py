@@ -23,21 +23,22 @@ class Chip8():
     x, y, nn = None, None, None
     draw_flag = False                       # Indicate if screen should be redrawn
     #Input map, each valid key is given the address to the key value in input buffer
-    keypad = {pygame.K_KP1: 0x0,  # key 1
-              pygame.K_KP2: 0x1,  # key 2
-              pygame.K_KP3: 0x2,  # key 3
-              pygame.K_KP4: 0x3,  # key 4
-              pygame.K_KP5: 0x4,  # key 5
-              pygame.K_KP6: 0x5,  # key 6
-              pygame.K_KP7: 0x6,  # key 7
-              pygame.K_KP8: 0x7,  # key 8
-              pygame.K_KP9: 0x8,  # key 9
-              pygame.K_a:     0xA,  # key A
-              pygame.K_b:     0xB,  # key B
-              pygame.K_c:     0xC,  # key C
-              pygame.K_d:     0xD,  # key D
-              pygame.K_e:     0xE,  # key E
-              pygame.K_f:     0xF,  # key F
+    keypad = {pygame.K_x: 0x0,  # key 0
+              pygame.K_1: 0x1,  # key 1
+              pygame.K_2: 0x2,  # key 2
+              pygame.K_3: 0x3,  # key 3
+              pygame.K_q: 0x4,  # key 4
+              pygame.K_w: 0x5,  # key 5
+              pygame.K_e: 0x6,  # key 6
+              pygame.K_a: 0x7,  # key 7
+              pygame.K_s: 0x8,  # key 8
+              pygame.K_d: 0x9,  # key 9
+              pygame.K_z:     0xA,  # key A
+              pygame.K_c:     0xB,  # key B
+              pygame.K_4:     0xC,  # key C
+              pygame.K_r:     0xD,  # key D
+              pygame.K_f:     0xE,  # key E
+              pygame.K_v:     0xF,  # key F
               }
     input_buffer = [0] * 16
     #5 8-bit values make up one character. I copied this because I'm lazy. Check properly.
