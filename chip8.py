@@ -3,21 +3,21 @@ from pyglet.text.layout import _AbstractBox
 __author__ = 'Laxl'
 import random
 import pygame
+import os.path
 from time import time
 
 pygame.init()
 
 class Console():
-
     font = pygame.font.SysFont("monospace", 20)
     font.set_bold(1)
     token_counter = 0.0
     def __init__(self):
         self.is_active = True
-        self.input_str = "TYPE LOAD <ROM_NAME.CH8> TO EMULATE ROMS"
+        self.input_str = "LOAD PONG.CH8"
         self.input_token = "_"
+
     def draw(self, screen, width, height, dt):
-        print dt
         self.token_counter += dt
         if self.token_counter > 20:
             if self.input_token == "_":
@@ -29,46 +29,51 @@ class Console():
         label = self.font.render(">"+self.input_str+self.input_token, 1, (255,255,0))
         screen.blit(label, (20, height-30))
 
-    # def on_key_press(self, key, modifiers):
-    #     if self.console_active:
-    #         if key == key.ENTER:
-    #             w = self.input_str.split()
-    #             self.read_console(w)
-    #         else:
-    #             try:
-    #                 self.input_str += chr(key).upper()
-    #             except:
-    #                 pass
-    #         if key == key.BACKSPACE:
-    #             self.input_str = self.input_str[:len(self.input_str)-1]
-    #         self.console_text.text = self.input_str
-    #         self.draw_flag = True
+    def on_key_press(self, key):
+        if key == pygame.K_RETURN:
+            w = self.input_str.split()
+            return self.read_console(w)
+        else:
+            try:
+                self.input_str += chr(key).upper()
+            except:
+                pass
+        if key == pygame.K_BACKSPACE:
+            self.input_str = self.input_str[:len(self.input_str)-2]
 
-    # def read_console(self, w):
-    #     cmd = w[0]
-    #     values = w[1:]
-    #     if cmd == "LOAD":
-    #         self.handle_load_cmd(values)
-    #         self.input_str = ""
-    #     elif cmd == "QUIT":
-    #         self.quit()
-    #     elif cmd == "RES":
-    #         try:
-    #             self.set_res(values)
-    #             self.font_size = max(16, self.height * 0.04)
-    #             self.console_text.font_size = self.font_size
-    #             self.console_img = image.create(self.width, max(16, self.height*0.04) * 0.06,
-    #                                             image.SolidColorImagePattern(color=(40, 70, 170, 190)))
-    #             self.input_str = ""
-    #             self.draw_flag = True
-    #         except ValueError:
-    #             self.input_str = "ERROR UNKNOWN COMMAND"
-    #     elif cmd == "CLOCK":
-    #         self.set_clock(values)
-    #     elif cmd == "ERROR":
-    #         self.input_str = ""
-    #     else:
-    #         self.input_str = "ERROR UNKNOWN COMMAND"
+    def read_console(self, w):
+        try:
+            cmd = w[0]
+        except IndexError:
+            self.is_active = False
+            return None
+        if cmd == "LOAD":
+            rom_path = " ".join(w[1:])
+            if os.path.isfile("roms/" + rom_path):
+                self.input_str = ""
+                self.is_active = False
+                return w
+            else:
+                self.input_str = "ERROR FILE NOT FOUND"
+        elif cmd == "RES":
+            try:
+                width = int(w[1])
+                if width < 2:
+                    raise ValueError
+            except ValueError:
+                self.input_str = "ERROR INVALID RESOLUTION"
+                return None
+            self.input_str = ""
+            self.is_active = False
+            return w
+        elif cmd == "QUIT":
+            return w
+        elif cmd == "ERROR":
+            self.input_str = ""
+            return None
+        else:
+            self.input_str = "ERROR UNKNOWN COMMAND"
+            return None
 
 class Chip8():
     #Debug stuff
@@ -76,7 +81,7 @@ class Chip8():
     step_instruction = False
     step = False
     step_key = pygame.K_RIGHT
-    rom_path = "roms/Pong.ch8"
+    rom_path = "roms/Ibm.ch8"
     #CPU variables
     memory = None                           # 4096 (0x1000) memory locations, all of which are 8 bits
     v = [0] * 16                            # the 16 8-bit V-registers
@@ -550,6 +555,7 @@ class Chippy8():
         self.emu = Chip8()
         self.console = Console()
         self.screen = pygame.display.set_mode((width,height))
+        self.run = True
 
     def draw(self, dt):
         self.screen.fill((0, 0, 0))
@@ -563,7 +569,19 @@ class Chippy8():
     def on_key_press(self, event):
         if event.key == pygame.K_TAB:
             self.console.is_active = not self.console.is_active
-        self.emu.on_key_press(event.key)
+        elif self.console.is_active:
+            cmd = self.console.on_key_press(event.key)
+            if cmd:
+                if cmd[0] == "QUIT":
+                    self.run = False
+                elif cmd[0] == "LOAD":
+                    self.emu.handle_load_cmd(cmd[1:])
+                elif cmd[0] == "RES":
+                    self.width = int(cmd[1])
+                    self.height = self.width/2
+                    self.screen = pygame.display.set_mode((self.width, self.height))
+        else:
+            self.emu.on_key_press(event.key)
 
     def on_key_release(self, event):
         self.emu.on_key_release(event.key)
@@ -574,15 +592,14 @@ class Chippy8():
         screen_timer = 0.0
         tick_last_frame = 0.0
         cpu_fudger = 0    # Extra miliseconds per tick
-        run = True
-        while run:
+        while self.run:
             t = pygame.time.get_ticks()
             dt = t - tick_last_frame
             screen_timer += dt
             tick_last_frame = pygame.time.get_ticks()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    run = False
+                    self.run = False
                 if event.type == pygame.KEYDOWN:
                     self.on_key_press(event)
                 if event.type == pygame.KEYUP:
