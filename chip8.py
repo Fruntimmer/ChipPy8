@@ -2,46 +2,111 @@ from pyglet.text.layout import _AbstractBox
 
 __author__ = 'Laxl'
 import random
-import pyglet
-from pyglet import text
-from pyglet import font
-from pyglet import window
-from pyglet import graphics
-from pyglet.window import key
-from pyglet import resource
-from pyglet import image
+import pygame
 from time import time
 
+pygame.init()
 
-class Chip8(window.Window):
+class Console():
+
+    font = pygame.font.SysFont("monospace", 20)
+    font.set_bold(1)
+    token_counter = 0.0
+    def __init__(self):
+        self.is_active = True
+        self.input_str = "TYPE LOAD <ROM_NAME.CH8> TO EMULATE ROMS"
+        self.input_token = "_"
+    def draw(self, screen, width, height, dt):
+        print dt
+        self.token_counter += dt
+        if self.token_counter > 20:
+            if self.input_token == "_":
+                self.input_token = ""
+            else:
+                self.input_token = "_"
+            self.token_counter = 0.0
+        pygame.draw.rect(screen, (50, 70, 170), (0, height-40,width, 40), 0)
+        label = self.font.render(">"+self.input_str+self.input_token, 1, (255,255,0))
+        screen.blit(label, (20, height-30))
+
+    # def on_key_press(self, key, modifiers):
+    #     if self.console_active:
+    #         if key == key.ENTER:
+    #             w = self.input_str.split()
+    #             self.read_console(w)
+    #         else:
+    #             try:
+    #                 self.input_str += chr(key).upper()
+    #             except:
+    #                 pass
+    #         if key == key.BACKSPACE:
+    #             self.input_str = self.input_str[:len(self.input_str)-1]
+    #         self.console_text.text = self.input_str
+    #         self.draw_flag = True
+
+    # def read_console(self, w):
+    #     cmd = w[0]
+    #     values = w[1:]
+    #     if cmd == "LOAD":
+    #         self.handle_load_cmd(values)
+    #         self.input_str = ""
+    #     elif cmd == "QUIT":
+    #         self.quit()
+    #     elif cmd == "RES":
+    #         try:
+    #             self.set_res(values)
+    #             self.font_size = max(16, self.height * 0.04)
+    #             self.console_text.font_size = self.font_size
+    #             self.console_img = image.create(self.width, max(16, self.height*0.04) * 0.06,
+    #                                             image.SolidColorImagePattern(color=(40, 70, 170, 190)))
+    #             self.input_str = ""
+    #             self.draw_flag = True
+    #         except ValueError:
+    #             self.input_str = "ERROR UNKNOWN COMMAND"
+    #     elif cmd == "CLOCK":
+    #         self.set_clock(values)
+    #     elif cmd == "ERROR":
+    #         self.input_str = ""
+    #     else:
+    #         self.input_str = "ERROR UNKNOWN COMMAND"
+
+class Chip8():
     #Debug stuff
     debug = False
     step_instruction = False
     step = False
-    step_key = key.RIGHT
-    #Console
-    rom_path = "roms/Ibm.ch8"
-    input_str = ""
-    console_active = True
+    step_key = pygame.K_RIGHT
+    rom_path = "roms/Pong.ch8"
+    #CPU variables
+    memory = None                           # 4096 (0x1000) memory locations, all of which are 8 bits
+    v = [0] * 16                            # the 16 8-bit V-registers
+    stack = []                              # the 16 8-bit stack-registers, not sure this actually is 16 8-bits. Check.
+    i = 0                                   # The address register is 16 bits wide and is used with several opcodes that
+                                            # involve memory operations /wiki
+    pc = None                               # 16-bit program counter
+    delay_timer, sound_timer = 0, 0         # CHIP-8 has two timers. They both count down at 60 hertz.
+    #instruction variables. I'll have a 0f00, 0ff0, 00ff available for all functions to use. Bit cleaner.
+    instr = None                            # Contains the 16-bit instruction to be read and executed
+    x, y, nn = None, None, None
+    draw_flag = False                       # Indicate if screen should be redrawn
     #Input map, each valid key is given the address to the key value in input buffer
-    keypad = {key.NUM_1: 0x0,  # key 1
-              key.NUM_2: 0x1,  # key 2
-              key.NUM_3: 0x2,  # key 3
-              key.NUM_4: 0x3,  # key 4
-              key.NUM_5: 0x4,  # key 5
-              key.NUM_6: 0x5,  # key 6
-              key.NUM_7: 0x6,  # key 7
-              key.NUM_8: 0x7,  # key 8
-              key.NUM_9: 0x8,  # key 9
-              key.A:     0xA,  # key A
-              key.B:     0xB,  # key B
-              key.C:     0xC,  # key C
-              key.D:     0xD,  # key D
-              key.E:     0xE,  # key E
-              key.F:     0xF,  # key F
+    keypad = {pygame.K_KP1: 0x0,  # key 1
+              pygame.K_KP2: 0x1,  # key 2
+              pygame.K_KP3: 0x2,  # key 3
+              pygame.K_KP4: 0x3,  # key 4
+              pygame.K_KP5: 0x4,  # key 5
+              pygame.K_KP6: 0x5,  # key 6
+              pygame.K_KP7: 0x6,  # key 7
+              pygame.K_KP8: 0x7,  # key 8
+              pygame.K_KP9: 0x8,  # key 9
+              pygame.K_a:     0xA,  # key A
+              pygame.K_b:     0xB,  # key B
+              pygame.K_c:     0xC,  # key C
+              pygame.K_d:     0xD,  # key D
+              pygame.K_e:     0xE,  # key E
+              pygame.K_f:     0xF,  # key F
               }
     input_buffer = [0] * 16
-
     #5 8-bit values make up one character. I copied this because I'm lazy. Check properly.
     fonts = [0xF0, 0x90, 0x90, 0x90, 0xF0,  # 0
              0x20, 0x60, 0x20, 0x20, 0x70,  # 1
@@ -60,29 +125,10 @@ class Chip8(window.Window):
              0xF0, 0x80, 0xF0, 0x80, 0xF0,  # E
              0xF0, 0x80, 0xF0, 0x80, 0x80   # F
              ]
-    memory = None                           # 4096 (0x1000) memory locations, all of which are 8 bits
-    v = [0] * 16                            # the 16 8-bit V-registers
-    stack = []                              # the 16 8-bit stack-registers, not sure this actually is 16 8-bits. Check.
-    i = 0                                   # The address register is 16 bits wide and is used with several opcodes that
-                                            # involve memory operations /wiki
-    pc = None                               # 16-bit program counter
-    delay_timer, sound_timer = 0, 0         # CHIP-8 has two timers. They both count down at 60 hertz.
-    #instruction variables. I'll have a 0f00, 0ff0, 00ff available for all functions to use. Bit cleaner.
-    instr = None                            # Contains the 16-bit instruction to be read and executed
-    x, y, nn = None, None, None
-    draw_flag = False                       # Indicate if screen should be redrawn
-    wait_input = False                      # Indicate if program should wait for input
-    clock_speed = 1.0/600
-    print clock_speed
 
-    def __init__(self,*args, **kwargs):
-        super(Chip8, self).__init__(*args, **kwargs)
-        self.beep = pyglet.resource.media('beep.wav', streaming=False)
-        self.font_size = self.height/30
-        self.console_text = text.Label("TYPE LOAD ROM_NAME.CH8 TO PLAY.", font_name='Times New Roman',
-                                       font_size=self.font_size, anchor_x='left', anchor_y='bottom')
-        self.console_img = image.create(self.width, self.font_size+10,
-                                        image.SolidColorImagePattern(color=(40, 70, 170, 190)))
+    def __init__(self):
+        self.beep = pygame.mixer.Sound('beep.wav', buffer=True)
+        #self.beep = pyglet.resource.media('beep.wav', streaming=False)
         self.display_buffer = [[0 for y in range(32)] for x in range(64)]
         self.op_map = {0x0000: self._00nn,          # 0000 RET and CLS bot have opcode most significant bit 0
                        0x1000: self._0nnn,          # 1nnn jump to address nnn
@@ -101,6 +147,7 @@ class Chip8(window.Window):
                        0xF000: self._fxnn,          # Branch out from all F opcodes
                        0xE000: self._exnn,          # Branch out from all E opcodes
                        }
+        self.initialize()
 
     def _00nn(self):
         if self.nn == 0xE0:
@@ -293,7 +340,6 @@ class Chip8(window.Window):
             #self.i += height
             self.draw_flag = True
 
-
     def _exnn(self):
         if self.nn == 0x9E:
             # Skip next instruction if key with the value of Vx is pressed.
@@ -420,86 +466,30 @@ class Chip8(window.Window):
         self.load_fonts()
         self.load_rom(self.rom_path)
 
-    def draw(self):  # Draws the screen. Pyglet.window.draw() override
-        self.clear()
-        graphics.glColor3f(1, 1, 1)
+    def draw(self, screen, scr_width, scr_height):  # Draws the screen. Pyglet.window.draw() override
+        side = scr_width/64
         for x in range (0, len(self.display_buffer)):
             for y in range(0, len(self.display_buffer[x])):
                 if self.display_buffer[x][y] == 1:
-                    side = self.width/64
-                    #vertices of a box
-                    v = [side*x, self.height - side*y,
-                         side*x, self.height -(side*y+side),
-                         side*x+side, self.height -(side*y+side),
-                         side*x+side, self.height-side*y
-                         ]
-                    graphics.draw(4, graphics.gl.GL_QUADS, ('v2i', (v[0],v[1], v[2],v[3], v[4],v[5], v[6],v[7])))
-        if self.console_active:
-            graphics.glEnable(graphics.GL_BLEND)
-            graphics.glBlendFunc(graphics.GL_SRC_ALPHA, graphics.GL_ONE_MINUS_SRC_ALPHA)
-            self.console_img.blit(0, 0, 0)
-            self.console_text.draw()
+                    pygame.draw.rect(screen, (255, 255, 255), (side*x, side*y,side, side), 0)
 
-    def on_key_press(self, symbol, modifiers):  # overrides Window.on_key_press
-        if symbol == key.TAB:
-            self.console_active = not self.console_active
-        if self.console_active:
-            if symbol == key.ENTER:
-                w = self.input_str.split()
-                self.read_console(w)
-            else:
-                try:
-                    self.input_str += chr(symbol).upper()
-                except:
-                    pass
-            if symbol == key.BACKSPACE:
-                self.input_str = self.input_str[:len(self.input_str)-1]
-            self.console_text.text = self.input_str
-            self.draw_flag = True
+    def on_key_press(self, key):  # overrides Window.on_key_press
+        if key == pygame.K_SPACE:
+            self.step_instruction = not self.step_instruction
+            self.debug = self.step_instruction
+        elif key == self.step_key:
+            self.step = True
         else:
-            if symbol == key.SPACE:
-                self.step_instruction = not self.step_instruction
-                self.debug = self.step_instruction
-            if symbol == self.step_key:
-                self.step = True
-            else:
-                try:
-                    self.input_buffer[self.keypad[symbol]] = 1
-                except KeyError:
-                    pass
+            try:
+                self.input_buffer[self.keypad[key]] = 1
+            except KeyError:
+                pass
 
-    def on_key_release(self, symbol, modifiers):
+    def on_key_release(self, key):
         try:
-            self.input_buffer[self.keypad[symbol]] = 0
+            self.input_buffer[self.keypad[key]] = 0
         except KeyError:
             pass
-
-    #Console functions
-    def read_console(self, w):
-        cmd = w[0]
-        values = w[1:]
-        if cmd == "LOAD":
-            self.handle_load_cmd(values)
-            self.input_str = ""
-        elif cmd == "QUIT":
-            self.quit()
-        elif cmd == "RES":
-            try:
-                self.set_res(values)
-                self.font_size = max(16, self.height * 0.04)
-                self.console_text.font_size = self.font_size
-                self.console_img = image.create(self.width, max(16, self.height*0.04) * 0.06,
-                                                image.SolidColorImagePattern(color=(40, 70, 170, 190)))
-                self.input_str = ""
-                self.draw_flag = True
-            except ValueError:
-                self.input_str = "ERROR UNKNOWN COMMAND"
-        elif cmd == "CLOCK":
-            self.set_clock(values)
-        elif cmd == "ERROR":
-            self.input_str = ""
-        else:
-            self.input_str = "ERROR UNKNOWN COMMAND"
 
     def set_clock(self, w):
         try:
@@ -515,17 +505,9 @@ class Chip8(window.Window):
         rom_string = " ".join(w)
         try:
             self.rom_path = "roms/"+rom_string
-            self.console_active = False
             self.initialize()
         except IOError:
             self.input_str = "ERROR COULD NOT FIND ROM"
-
-    def set_res(self, w):
-        print w
-        self.set_size(int(w[0]), int(w[1]))
-
-    def quit(self):
-        self.has_exit = True
 
     #CPU functions
     def fetch_instruction(self):
@@ -534,10 +516,10 @@ class Chip8(window.Window):
         i1 <<= 8
         return i1 | i2
 
-    def tick(self):
+    def cpu_tick(self):
         #fetch instruction
         self.instr = self.fetch_instruction()
-        self.pc += 2  # Advance PC. If done after execution of instruction I think it will mess up CALL and JUMP?
+        self.pc += 2
         #decode instruction
         #Parts of instruction usually used individually
         opcode = self.instr & 0xF000
@@ -550,35 +532,74 @@ class Chip8(window.Window):
         except KeyError:
             print "Unknown command: " + hex(self.instr)[2:]
 
-    def main(self):
-        self.initialize()
-        screen_clock = 0.0
-        cpu_clock = 0.0
-        while not self.has_exit:
-            tick_start = time()
-            self.dispatch_events()
-            if ((self.step_instruction and self.step) or not self.step_instruction) and cpu_clock > self.clock_speed:
-                self.tick()
-                cpu_clock = 0.0
-                self.step = False
-                if self.delay_timer > 0:
-                    self.delay_timer -= 1
-                if self.sound_timer > 0:
-                    if self.sound_timer == 1:
-                        #self.beep.play()
-                        pass
-                    self.sound_timer -= 1
-            if self.draw_flag and screen_clock > (1/30.0):
-                self.draw()
-                self.flip()
-                self.draw_flag = False
-                screen_clock = 0.0
-            screen_clock += time()-tick_start
-            cpu_clock += time()-tick_start
+    def update(self):
+        if (self.step_instruction and self.step) or not self.step_instruction:
+            self.cpu_tick()
+            self.step = False
+            if self.delay_timer > 0:
+                self.delay_timer -= 1
+            if self.sound_timer > 0:
+                if self.sound_timer == 1:
+                    self.beep.play()
+                self.sound_timer -= 1
 
 
-c8 = Chip8(1280, 640)
+class Chippy8():
+    def __init__(self, width, height):
+        self.width, self.height = width, height
+        self.emu = Chip8()
+        self.console = Console()
+        self.screen = pygame.display.set_mode((width,height))
 
-c8.main()
+    def draw(self, dt):
+        self.screen.fill((0, 0, 0))
+        self.emu.draw(self.screen, self.width, self.height)
+        if self.console.is_active:
+            self.console.draw(self.screen, self.width, self.height, dt)
+
+    def update(self):
+        self.emu.update()
+
+    def on_key_press(self, event):
+        if event.key == pygame.K_TAB:
+            self.console.is_active = not self.console.is_active
+        self.emu.on_key_press(event.key)
+
+    def on_key_release(self, event):
+        self.emu.on_key_release(event.key)
+
+    def loop(self):
+        screen_timer = 0.0
+        clock_timer = 0.0
+        screen_timer = 0.0
+        tick_last_frame = 0.0
+        cpu_fudger = 0    # Extra miliseconds per tick
+        run = True
+        while run:
+            t = pygame.time.get_ticks()
+            dt = t - tick_last_frame
+            screen_timer += dt
+            tick_last_frame = pygame.time.get_ticks()
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    run = False
+                if event.type == pygame.KEYDOWN:
+                    self.on_key_press(event)
+                if event.type == pygame.KEYUP:
+                    self.on_key_release(event)
+            if cpu_fudger > 500:
+                self.update()
+                cpu_fudger = 0
+            if screen_timer > 1.0/60*1000 and self.emu.draw_flag:
+                self.draw(dt)
+                screen_timer = 0.0
+                pygame.display.flip()
+            cpu_fudger +=1
+            pygame.event.pump()
+
+chippy = Chippy8(1280, 640)
+chippy.loop()
+
+
 
 
