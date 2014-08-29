@@ -1,15 +1,15 @@
 __author__ = 'Laxl'
 import random
-import pygame
+import pyglet
 
 class Chip8():
     #Debug stuff
     debug = False
     step_instruction = False
     step = False
-    step_key = pygame.K_RIGHT
+    step_key = pyglet.window.key.RIGHT
 
-    rom_path = "roms/Ibm.ch8"
+    rom_path = "roms/Pong.ch8"
     #CPU variables
     memory = None                           # 4096 (0x1000) memory locations, all of which are 8 bits
     v = [0] * 16                            # the 16 8-bit V-registers
@@ -23,22 +23,22 @@ class Chip8():
     x, y, nn = None, None, None
     draw_flag = False                       # Indicate if screen should be redrawn
     #Input map, each valid key is given the address to the key value in input buffer
-    keypad = {pygame.K_x: 0x0,  # key 0
-              pygame.K_1: 0x1,  # key 1
-              pygame.K_2: 0x2,  # key 2
-              pygame.K_3: 0x3,  # key 3
-              pygame.K_q: 0x4,  # key 4
-              pygame.K_w: 0x5,  # key 5
-              pygame.K_e: 0x6,  # key 6
-              pygame.K_a: 0x7,  # key 7
-              pygame.K_s: 0x8,  # key 8
-              pygame.K_d: 0x9,  # key 9
-              pygame.K_z:     0xA,  # key A
-              pygame.K_c:     0xB,  # key B
-              pygame.K_4:     0xC,  # key C
-              pygame.K_r:     0xD,  # key D
-              pygame.K_f:     0xE,  # key E
-              pygame.K_v:     0xF,  # key F
+    keypad = {pyglet.window.key.X: 0x0,  # key 0
+              pyglet.window.key._1: 0x1,  # key 1
+              pyglet.window.key._2: 0x2,  # key 2
+              pyglet.window.key._3: 0x3,  # key 3
+              pyglet.window.key.Q: 0x4,  # key 4
+              pyglet.window.key.W: 0x5,  # key 5
+              pyglet.window.key.E: 0x6,  # key 6
+              pyglet.window.key.A: 0x7,  # key 7
+              pyglet.window.key.S: 0x8,  # key 8
+              pyglet.window.key.D: 0x9,  # key 9
+              pyglet.window.key.Z:     0xA,  # key A
+              pyglet.window.key.C:     0xB,  # key B
+              pyglet.window.key._4:     0xC,  # key C
+              pyglet.window.key.R:     0xD,  # key D
+              pyglet.window.key.F:     0xE,  # key E
+              pyglet.window.key.V:     0xF,  # key F
               }
     input_buffer = [0] * 16
     #5 8-bit values make up one character. I copied this because I'm lazy. Check properly.
@@ -60,8 +60,9 @@ class Chip8():
              0xF0, 0x80, 0xF0, 0x80, 0x80   # F
              ]
 
-    def __init__(self):
-        self.beep = pygame.mixer.Sound('beep.wav', buffer=True)
+    def __init__(self, scr_width, scr_height):
+        self.beep = pyglet.resource.media('beep_unc.wav', streaming=False)
+        #self.beep = pygame.mixer.Sound('beep.wav', buffer=True)
         self.display_buffer = [[0 for y in range(32)] for x in range(64)]
         self.op_map = {0x0000: self._00nn,          # 0000 RET and CLS bot have opcode most significant bit 0
                        0x1000: self._0nnn,          # 1nnn jump to address nnn
@@ -80,6 +81,7 @@ class Chip8():
                        0xF000: self._fxnn,          # Branch out from all F opcodes
                        0xE000: self._exnn,          # Branch out from all E opcodes
                        }
+        self.pixel = pyglet.image.create(scr_width/64, scr_height/32, pyglet.image.SolidColorImagePattern(color=(255, 255, 255, 255)))
         self.initialize()
 
     def _00nn(self):
@@ -399,15 +401,28 @@ class Chip8():
         self.load_fonts()
         self.load_rom(self.rom_path)
 
-    def draw(self, screen, scr_width, scr_height):  # Draws the screen. Pyglet.window.draw() override
-        side = scr_width/64
+    def draw(self, scr_width, scr_height):  # Draws the screen. Pyglet.window.draw() override
+        sprite_list = []
+        batch = pyglet.graphics.Batch()
+        side_x = scr_width/64
+        side_y = scr_height/32
+        pyglet.graphics.glColor3f(1, 1, 1)
         for x in range (0, len(self.display_buffer)):
             for y in range(0, len(self.display_buffer[x])):
                 if self.display_buffer[x][y] == 1:
-                    pygame.draw.rect(screen, (255, 255, 255), (side*x, side*y,side, side), 0)
+                    side = scr_width/64
+                    #vertices of a box
+                    v = [side*x, scr_height - side*y,
+                         side*x, scr_height -(side*y+side),
+                         side*x+side, scr_height -(side*y+side),
+                         side*x+side, scr_height-side*y
+                         ]
+                    pyglet.graphics.draw(4, pyglet.graphics.gl.GL_QUADS, ('v2i', (v[0],v[1], v[2],v[3], v[4],v[5], v[6],v[7])))
+        self.draw_flag = False
+
 
     def on_key_press(self, key):  # overrides Window.on_key_press
-        if key == pygame.K_SPACE:
+        if key == pyglet.window.key.SPACE:
             self.step_instruction = not self.step_instruction
             self.debug = self.step_instruction
         elif key == self.step_key:
@@ -474,6 +489,7 @@ class Chip8():
             if self.sound_timer > 0:
                 if self.sound_timer == 1:
                     self.beep.play()
+                    pass
                 self.sound_timer -= 1
 
 

@@ -13,4 +13,7 @@ Controls are mapped to:
 	asdf
 	zxcv
 
+Pressing spacebar will put the emulator in debugging mode. All instructions and most results of operations are printed.
+Step instructions with left arrow key when in this mode.
+
 All roms are made by David Winter.
