@@ -13,4 +13,6 @@ Controls are mapped to:
 	asdf
 	zxcv
 
+Press space to enter debug mode. In debug mode you can step instructions with left arrow key.
+
 All roms are made by David Winter.

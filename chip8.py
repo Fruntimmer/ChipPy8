@@ -9,7 +9,7 @@ class Chip8():
     step = False
     step_key = pygame.K_RIGHT
 
-    rom_path = "roms/Ibm.ch8"
+    rom_path = "roms/IBM.CH8"
     #CPU variables
     memory = None                           # 4096 (0x1000) memory locations, all of which are 8 bits
     v = [0] * 16                            # the 16 8-bit V-registers
@@ -61,7 +61,7 @@ class Chip8():
              ]
 
     def __init__(self):
-        self.beep = pygame.mixer.Sound('beep.wav', buffer=True)
+        self.beep = pygame.mixer.Sound('beep.wav')
         self.display_buffer = [[0 for y in range(32)] for x in range(64)]
         self.op_map = {0x0000: self._00nn,          # 0000 RET and CLS bot have opcode most significant bit 0
                        0x1000: self._0nnn,          # 1nnn jump to address nnn
